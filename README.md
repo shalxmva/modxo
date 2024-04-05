@@ -1,17 +1,37 @@
-# modxo
-Xbox LPC Port modchip using a Raspberry Pi Pico
-Modxo is the firmware that makes a Raspberry pi pico into an original Xbox Modchip.
+# Modxo
+Modxo (pronnounced as "Modsho") is a Xbox LPC Port firmware that converts the Raspberry Pi Pico
+into an Original Xbox Modchip that allows running a bios.
 
-## Planned features
--Implement LFrame cancel to make it compatible without lifting LFrame pin in v1.6
-
+## Future features
 -Implement device communication (specially with LCD)
 
-## Installation requirements
+# Installation
+## Requirements
 -Working LPC Port
 -Original Raspberry Pi Pico or RP2040 Zero (There are some clone boards that are not compatible)
 -4 100 Ohm resistors (tested with 1/4 W resistors)
 
-## Wiring diagrams
-### Xbox v1.6
+## Build
+
 ![Wiring diagram](wiring_diagram.png)
+
+Note: D0 is only needed by versions different to 1.6
+Note: LFrame pin connection is only needed by version 1.6. Also LPC Rebuild is Required
+
+## Flashing firmware
+
+### Packing Bios
+1.- Go to https://shalxmva.github.io/modxo/
+2.- Drag and Drop your bios file
+3.- UF2 File with bios image will be downloaded
+
+### Flashing steps
+1.- Connect Raspberry Pi Pico with BOOTSEL button pressed to a PC and one new drive will appear.
+2.- Copy Modxo.uf2 into the Raspberry Pi Pico Drive.
+3.- Reconnect Raspberry Pi Pico with BOOTSEL button pressed, so the previous drive will showup again.
+4.- Copy your bios UF2 file into the drive
+
+## Build Instructions
+Todo 
+### Windows
+Todo
