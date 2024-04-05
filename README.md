@@ -1,6 +1,7 @@
 # Modxo
 Modxo (pronnounced as "Modsho") is a Xbox LPC Port firmware that converts the Raspberry Pi Pico
 into an Original Xbox Modchip that allows running a bios.
+![Modchip + Axolotl = Modxo](images/logo.png)
 
 ## Future features
 -Implement device communication (specially with LCD)
@@ -13,7 +14,7 @@ into an Original Xbox Modchip that allows running a bios.
 
 ## Build
 
-![Wiring diagram](wiring_diagram.png)
+![Wiring diagram](images/wiring_diagram.png)
 
 Note: D0 is only needed by versions different to 1.6
 Note: LFrame pin connection is only needed by version 1.6. Also LPC Rebuild is Required
