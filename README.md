@@ -36,3 +36,11 @@ into an Original Xbox Modchip that allows running a bios.
 Todo 
 #### Windows
 Todo
+
+
+# Support this project
+
+This is a non profit project, but you can buy me some beers to keep motivation while coding!!
+Any help will be appreciated!!
+
+https://www.buymeacoffee.com/shalx
