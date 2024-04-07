@@ -1,0 +1,137 @@
+;SPDX short identifier: BSD-2-Clause
+;BSD 2-Clause License
+;
+;Copyright (c) 2024, Shalx <Alejandro L. Huitron shalxmva@gmail.com>
+;
+;Redistribution and use in source and binary forms, with or without
+;modification, are permitted provided that the following conditions are met:
+;
+;1. Redistributions of source code must retain the above copyright notice, this
+;   list of conditions and the following disclaimer.
+;
+;2. Redistributions in binary form must reproduce the above copyright notice,
+;   this list of conditions and the following disclaimer in the documentation
+;   and/or other materials provided with the distribution.;
+;
+;THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+;AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+;IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+;DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+;FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+;DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+;SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+;CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+;OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+;OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+.program lpc_read_request
+.define public LAD0_PIN   0
+.define public LCLK_PIN   4
+.define public LFRAME_PIN 5
+.define public D0_PIN     6
+.side_set 1 opt pindirs
+.wrap_target
+    pull
+wait_start:
+    wait 0 irq 0
+    wait 0 gpio LCLK_PIN
+    in pins,4
+    mov X, ISR
+check_start_again:
+    wait 1 gpio LCLK_PIN
+    mov ISR, null
+    jmp X-- wait_start
+
+wait_cmd:
+    wait 0 gpio LCLK_PIN
+    in pins,4 
+    mov X, ISR
+    jmp X!=Y check_start_again
+
+    mov X, OSR side 1
+    mov ISR, null
+
+read_nibbles:
+    wait 0 gpio LCLK_PIN
+    in pins, 4 
+    set pins 5 
+    wait 1 gpio LCLK_PIN
+    jmp X-- read_nibbles
+    
+    push
+    irq set 0
+    set pindirs, 15
+    set X,3
+    pull
+    wait 0 gpio  LCLK_PIN
+repeat:
+    wait 1 gpio  LCLK_PIN
+    OUT pins,4
+    wait 0 gpio  LCLK_PIN
+    jmp X-- repeat
+   ;wait 1 gpio LCLK_PIN
+   set pindirs, 0b00000 [4]
+   irq clear 0 side 0
+.wrap
+% c-sdk {
+
+#define LPC_PIN_START lpc_read_request_LAD0_PIN
+#define LCLK_PIN lpc_read_request_LCLK_PIN
+#define LFRAME_PIN lpc_read_request_LFRAME_PIN
+#define D0_PIN lpc_read_request_D0_PIN
+#define LAD_PIN_COUNT 4
+
+
+
+pio_sm_config __not_in_flash_func(lpc_read_request_init)(PIO pio, uint sm, uint offset, uint address_size, bool lframe_cancel) {
+   pio_sm_config c =lpc_read_request_program_get_default_config(offset);
+
+   // Connect the GPIOs to selected PIO block
+    for(uint i = LPC_PIN_START; i < LPC_PIN_START + LAD_PIN_COUNT; i++) {
+        pio_gpio_init(pio, i);
+        gpio_disable_pulls(i);
+    }
+    
+   pio_sm_set_consecutive_pindirs(pio, sm, LPC_PIN_START, LAD_PIN_COUNT, false);
+
+   pio_gpio_init(pio, LCLK_PIN);
+   gpio_disable_pulls(LCLK_PIN);
+
+   if(lframe_cancel){
+    pio_gpio_init(pio, LFRAME_PIN);
+    gpio_disable_pulls(LCLK_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, LFRAME_PIN, 1,  true);
+   }
+
+
+   // Set the selected pin directions for the selected 6 pins. LAD[0-3] + LCLK + LFRAME (false: in)
+
+
+   sm_config_set_in_shift(
+      &c,
+      false,  // ShiftDir : true: shift ISR to right, false: shift ISR to left
+      true,   // AutoPush : true: enabled, false: disabled
+      address_size      // AutoPush threshold: <0-32>
+   );
+
+   // Set 'IN' base pin. To read the LAD[0-3].
+   sm_config_set_in_pins (&c, LPC_PIN_START);
+   sm_config_set_out_pins(&c, LPC_PIN_START, LAD_PIN_COUNT);
+   sm_config_set_set_pins(&c, LPC_PIN_START, LAD_PIN_COUNT);
+   
+   
+
+   if(lframe_cancel){
+    sm_config_set_sideset_pins(&c, LFRAME_PIN);
+   }else{
+    sm_config_set_sideset_pins(&c, 31);
+   }
+
+   sm_config_set_clkdiv(&c, 1);
+   return c;
+}
+
+
+
+%}
