@@ -25,51 +25,44 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
 #include <stdio.h>
-#include <string.h>
 #include "pico/stdlib.h"
-#include "pico/multicore.h"
-#include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "hardware/irq.h"
+#include "pico/multicore.h"
+#include "hardware/structs/bus_ctrl.h"
 
-#include "lpc/lpc_interface.h"
+#include "flash_rom.h"
+#include "../lpc/lpc_interface.h"
 
-#include "flash_rom/flash_rom.h"
-#include "superio/LPC47M152.h"
-#include "superio/UART_16550.h"
+#define FLASH_ROM_START_ADDRESS ((uint8_t*)0x10040000)
+#define FLASH_ROM_MASK_ADDRESS  ((uint32_t*)(FLASH_ROM_START_ADDRESS - (4*1024)))
+uint32_t flash_rom_mask;
 
-#define SYS_FREQ_IN_KHZ (264 * 1000)
-#define LED_STATUS_PIN PICO_DEFAULT_LED_PIN 
+static const uint32_t* flash_rom_mask_address = FLASH_ROM_MASK_ADDRESS;
+static const uint8_t*  flash_rom_data = FLASH_ROM_START_ADDRESS;
+static uint8_t mem_read_count=0;
 
-void __not_in_flash_func(superio_port_init)(void){
+
+static void __not_in_flash_func(mem_read_handler)(uint32_t address, uint8_t* data){
+    register uint32_t mem_data;
+    *data = flash_rom_data[address & flash_rom_mask];
+
+    if(mem_read_count < 25){
+        mem_read_count++;
+    }else if(mem_read_count == 25){
+        mem_read_count++;
+    }
+}
+
+static void __not_in_flash_func(mem_write_handler)(uint32_t address, uint8_t* data){
 
 }
 
-int __not_in_flash_func(main)(void){
-    set_sys_clock_khz(SYS_FREQ_IN_KHZ, true);
-    stdio_init_all();
+bool __not_in_flash_func(flashrom_init)(void){
+    flash_rom_mask = *flash_rom_mask_address;
+    lpc_set_callback(LPC_OP_MEM_READ,  mem_read_handler);
+    lpc_set_callback(LPC_OP_MEM_WRITE, mem_write_handler);
 
-    gpio_init(LED_STATUS_PIN);
-    gpio_set_dir(LED_STATUS_PIN, GPIO_OUT);
-    gpio_put(LED_STATUS_PIN, 1);
-
-    init_lpc_interface(pio0);
-    
-    if( flashrom_init() == false){
-        while(true)
-        {
-            gpio_put(LED_STATUS_PIN, 1);
-            sleep_ms(250);
-            printf("Flash rom not programmed\n");
-            gpio_put(LED_STATUS_PIN, 0);
-            sleep_ms(250);
-        }
-    }
-    
-    lpc47m152_init();
-    uart_16550_init();
-
-    while(true){
-    }
+    return (flash_rom_mask != 0xFFFFFFFF);
 }

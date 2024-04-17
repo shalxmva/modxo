@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_BUILD_TYPE Debug)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -29,7 +30,10 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/main.c 
     src/lpc/lpc_comm.pio 
     src/lpc/lpc_interface.c
-    src/flash_mem/flash_mem.c
+    src/lpc/lpc_log.c
+    src/flash_rom/flash_rom.c
+    src/superio/LPC47M152.c
+    src/superio/UART_16550.c
 )
 
 # Link to pico_stdlib (gpio, time, etc. functions)

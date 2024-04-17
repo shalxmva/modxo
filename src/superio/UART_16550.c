@@ -32,32 +32,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pico/multicore.h"
 #include "hardware/structs/bus_ctrl.h"
 
-#include "flash_mem.h"
-#include "../lpc/lpc_interface.h"
+#include "../lpc/superio.h"
+#include "tusb.h"
 
-#define FLASH_ROM_START_ADDRESS ((uint8_t*)0x10040000)
-#define FLASH_ROM_MASK_ADDRESS  ((uint32_t*)(FLASH_ROM_START_ADDRESS - (4*1024)))
-uint32_t flash_rom_mask;
-
-static const uint32_t* flash_rom_mask_address = FLASH_ROM_MASK_ADDRESS;
-static const uint8_t*  flash_rom_data = FLASH_ROM_START_ADDRESS;
-static uint8_t mem_read_count=0;
-
-
-uint8_t __not_in_flash_func(mem_read_handler)(uint32_t address){
-    register uint32_t mem_data;
-    mem_data = (uint32_t)flash_rom_data[address & flash_rom_mask];
-
-    if(mem_read_count < 25){
-        mem_read_count++;
-    }else if(mem_read_count == 25){
-        mem_read_count++;
+void __not_in_flash_func(uart_16550_port_write)(uint16_t address, uint8_t* data){
+    //UART Ports
+    if((address == 0x3F8)){
+        if(tud_cdc_connected())
+            tud_cdc_write(data,1);
     }
-
-    return mem_data;
 }
 
-bool __not_in_flash_func(init_flash_mem)(){
-    flash_rom_mask = *flash_rom_mask_address;
-    return (flash_rom_mask != 0xFFFFFFFF);
+void __not_in_flash_func(uart_16550_port_read)(uint16_t address, uint8_t* data){
+    //UART Ports
+    if(tud_cdc_connected()){  //If usb serial port is open
+        if(address == 0x3FD){
+            *data = (tud_cdc_write_available()?0x20:0x00)|(tud_cdc_available()?0x01:0x00);
+        }
+
+        if(address == 0x3F8){
+            tud_cdc_read(data,1);
+        }
+     }else{
+        *data = 0;
+     }
+}
+
+void __not_in_flash_func(uart_16550_init)(void){
+    superio_add_handler(0x03F8, 0xFFF8, uart_16550_port_read,   uart_16550_port_write);     //16550 Uart port emulation
 }
