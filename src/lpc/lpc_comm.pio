@@ -34,7 +34,7 @@
 .wrap_target
     pull
 wait_start:
-    wait 0 irq 0
+    wait 0 irq 7
     wait 0 gpio LCLK_PIN
     in pins,4
     mov X, ISR
@@ -44,11 +44,12 @@ check_start_again:
     jmp X-- wait_start
 
 wait_cmd:
-    wait 0 gpio LCLK_PIN
+    wait 0 gpio LCLK_PIN [2]
     in pins,4 
     mov X, ISR
     jmp X!=Y check_start_again
-
+    
+    irq set 7
     mov X, OSR side 1
     mov ISR, null
 
@@ -60,7 +61,7 @@ read_nibbles:
     jmp X-- read_nibbles
     
     push
-    irq set 0
+    irq set 0 rel
     set pindirs, 15
     set X,3
     pull
@@ -71,8 +72,8 @@ repeat:
     wait 0 gpio  LCLK_PIN
     jmp X-- repeat
    ;wait 1 gpio LCLK_PIN
-   set pindirs, 0b00000 [4]
-   irq clear 0 side 0
+   set pindirs, 0b00000 [7]
+   irq clear 7 side 0
 .wrap
 % c-sdk {
 
@@ -82,56 +83,48 @@ repeat:
 #define D0_PIN lpc_read_request_D0_PIN
 #define LAD_PIN_COUNT 4
 
+void __not_in_flash_func(lpc_read_request_init)(PIO pio, uint sm, uint offset, uint address_size, bool lframe_cancel) {
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_config c =lpc_read_request_program_get_default_config(offset);
+  
+    sm_config_set_in_shift(
+        &c,
+        false,  // ShiftDir : true: shift ISR to right, false: shift ISR to left
+        true,   // AutoPush : true: enabled, false: disabled
+        address_size      // AutoPush threshold: <0-32>
+    );
 
+    // Set 'IN' base pin. To read the LAD[0-3].
+    sm_config_set_in_pins (&c, LPC_PIN_START);
+    sm_config_set_out_pins(&c, LPC_PIN_START, LAD_PIN_COUNT);
+    sm_config_set_set_pins(&c, LPC_PIN_START, LAD_PIN_COUNT);
 
-pio_sm_config __not_in_flash_func(lpc_read_request_init)(PIO pio, uint sm, uint offset, uint address_size, bool lframe_cancel) {
-   pio_sm_config c =lpc_read_request_program_get_default_config(offset);
+    pio_sm_set_consecutive_pindirs(pio, sm, LPC_PIN_START, LAD_PIN_COUNT, false);   
+   
 
-   // Connect the GPIOs to selected PIO block
-    for(uint i = LPC_PIN_START; i < LPC_PIN_START + LAD_PIN_COUNT; i++) {
-        pio_gpio_init(pio, i);
-        gpio_disable_pulls(i);
+    if(lframe_cancel){
+        pio_sm_set_consecutive_pindirs(pio, sm, LFRAME_PIN, 1,  true);
+        sm_config_set_sideset_pins(&c, LFRAME_PIN);
+    }else{
+        sm_config_set_sideset_pins(&c, 31);
     }
-    
-   pio_sm_set_consecutive_pindirs(pio, sm, LPC_PIN_START, LAD_PIN_COUNT, false);
 
-   pio_gpio_init(pio, LCLK_PIN);
-   gpio_disable_pulls(LCLK_PIN);
+    sm_config_set_clkdiv(&c, 1);
+    pio_sm_set_config(pio, sm, &c);
+    pio_sm_clear_fifos(pio, sm);
 
-   if(lframe_cancel){
-    pio_gpio_init(pio, LFRAME_PIN);
-    gpio_disable_pulls(LCLK_PIN);
-    pio_sm_set_consecutive_pindirs(pio, sm, LFRAME_PIN, 1,  true);
-   }
+        // Clear FIFO debug flags
+    const uint32_t fdebug_sm_mask =
+            (1u << PIO_FDEBUG_TXOVER_LSB) |
+            (1u << PIO_FDEBUG_RXUNDER_LSB) |
+            (1u << PIO_FDEBUG_TXSTALL_LSB) |
+            (1u << PIO_FDEBUG_RXSTALL_LSB);
+    pio->fdebug = fdebug_sm_mask << sm;
 
-
-   // Set the selected pin directions for the selected 6 pins. LAD[0-3] + LCLK + LFRAME (false: in)
-
-
-   sm_config_set_in_shift(
-      &c,
-      false,  // ShiftDir : true: shift ISR to right, false: shift ISR to left
-      true,   // AutoPush : true: enabled, false: disabled
-      address_size      // AutoPush threshold: <0-32>
-   );
-
-   // Set 'IN' base pin. To read the LAD[0-3].
-   sm_config_set_in_pins (&c, LPC_PIN_START);
-   sm_config_set_out_pins(&c, LPC_PIN_START, LAD_PIN_COUNT);
-   sm_config_set_set_pins(&c, LPC_PIN_START, LAD_PIN_COUNT);
-   
-   
-
-   if(lframe_cancel){
-    sm_config_set_sideset_pins(&c, LFRAME_PIN);
-   }else{
-    sm_config_set_sideset_pins(&c, 31);
-   }
-
-   sm_config_set_clkdiv(&c, 1);
-   return c;
+    // Finally, clear some internal SM state
+    pio_sm_restart(pio, sm);
+    pio_sm_clkdiv_restart(pio, sm);
 }
-
 
 
 %}

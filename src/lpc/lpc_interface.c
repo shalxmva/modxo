@@ -33,179 +33,248 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pico/multicore.h"
 #include "hardware/structs/padsbank0.h"
 #include "hardware/structs/bus_ctrl.h"
-
-#include "../flash_mem/flash_mem.h"
 #include "lpc_interface.h"
+#include "superio.h"
 
 #include "lpc_comm.pio.h"
-
-#define POLLING
-
-#define LPC_BUS_PIN_START (0U)
-#define LPC_BUS_PIN_COUNT (4U)
+#include "lpc_log.h"
 
 void start_mem_read_sm(void);
+
+typedef struct{
+    uint32_t nibbles_read;
+    lpc_handler_cback handler;
+    uint8_t cyctype_dir;
+    uint8_t address_len;
+}LPC_SM_HANDLER;
+
+typedef struct {
+    uint16_t port_base;
+    uint16_t mask;
+    SUPERIO_PORT_CALLBACK_T read_cback;
+    SUPERIO_PORT_CALLBACK_T write_cback;
+}SUPERIO_PORT_HANDLER_T;
+
+static void io_write_hdlr(uint32_t address, uint8_t* data);
+static void io_read_hdlr(uint32_t address, uint8_t* data);
+
+LPC_SM_HANDLER lpc_handlers[LPC_OP_TOTAL]={
+    [LPC_OP_IO_READ]  = {.nibbles_read=4 ,.cyctype_dir=0, .handler=io_read_hdlr , .address_len=16},
+    [LPC_OP_IO_WRITE] = {.nibbles_read=6 ,.cyctype_dir=2, .handler=io_write_hdlr, .address_len=16},
+    [LPC_OP_MEM_READ] = {.nibbles_read=8 ,.cyctype_dir=4, .handler=NULL, .address_len=32},
+    [LPC_OP_MEM_WRITE]= {.nibbles_read=10,.cyctype_dir=6, .handler=NULL, .address_len=32},
+}; // 4 SM per PIO
+
+#define SUPERIO_HANDLER_MAX_ENTRIES 32
+static SUPERIO_PORT_HANDLER_T hdlr_table[SUPERIO_HANDLER_MAX_ENTRIES];
+static uint8_t total_entries=0;
+
+
+static void __not_in_flash_func(io_write_hdlr)(uint32_t address, uint8_t* data){
+    for(uint8_t tidx=0; tidx < total_entries; tidx++){
+        if((address&hdlr_table[tidx].mask) == hdlr_table[tidx].port_base){
+            hdlr_table[tidx].write_cback(address, data);
+        }
+    }
+}
+
+static void __not_in_flash_func(io_read_hdlr)(uint32_t address, uint8_t* data){
+    for(uint8_t tidx=0; tidx < total_entries; tidx++){
+        if((address&hdlr_table[tidx].mask) == hdlr_table[tidx].port_base){
+            hdlr_table[tidx].read_cback(address, data);
+        }
+    }
+}
+
 //PIO
-static PIO pio = pio0;
-static int lpc_mem_read_SM;
+static PIO _pio;
+static bool _disable_internal_flash=true;
 
-uint32_t buffer[1024];
-uint32_t idx;
-uint32_t pidx;
-int count=0;
+static void __not_in_flash_func(lpc_gpio_init)(PIO pio){
+   // Connect the GPIOs to selected PIO block
+    for(uint i = LPC_PIN_START; i < LPC_PIN_START + LAD_PIN_COUNT; i++) {
+        pio_gpio_init(pio, i);
+        gpio_disable_pulls(i);
+    }
 
-bool disable_internal_flash=true;
+   pio_gpio_init(pio, LCLK_PIN);
+   gpio_disable_pulls(LCLK_PIN);
+   
+   pio_gpio_init(pio, LFRAME_PIN);
+   gpio_disable_pulls(LFRAME_PIN);
+}
 
-static void __not_in_flash_func(gpio_set_max_drivestrength)(uint gpio) {
+
+static void __not_in_flash_func(gpio_set_max_drivestrength)(io_rw_32 gpio, uint32_t strength) {
     hw_write_masked(
             &padsbank0_hw->io[gpio],
-            PADS_BANK0_GPIO0_DRIVE_VALUE_12MA<<PADS_BANK0_GPIO0_DRIVE_LSB,
+            strength<<PADS_BANK0_GPIO0_DRIVE_LSB,
             PADS_BANK0_GPIO0_DRIVE_BITS
     );
 }
 
-static void __not_in_flash_func(pio_custom_init)(PIO pio, uint sm, uint initial_pc, const pio_sm_config *config, uint32_t op){
-        valid_params_if(PIO, initial_pc < PIO_INSTRUCTION_COUNT);
-    // Halt the machine, set some sensible defaults
-    pio_sm_set_enabled(pio, sm, false);
 
-    if (config) {
-        pio_sm_set_config(pio, sm, config);
-    } else {
-        pio_sm_config c = pio_get_default_sm_config();
-        pio_sm_set_config(pio, sm, &c);
-    }
+static void __not_in_flash_func(pio_custom_init)(PIO pio, uint sm, uint offset, bool lframe_cancel){
+    valid_params_if(PIO, offset < PIO_INSTRUCTION_COUNT);
+    lpc_read_request_init(pio, sm, offset, lpc_handlers[sm].address_len, lframe_cancel);
 
-    pio_sm_clear_fifos(pio, sm);
-
-    // Clear FIFO debug flags
-    const uint32_t fdebug_sm_mask =
-            (1u << PIO_FDEBUG_TXOVER_LSB) |
-            (1u << PIO_FDEBUG_RXUNDER_LSB) |
-            (1u << PIO_FDEBUG_TXSTALL_LSB) |
-            (1u << PIO_FDEBUG_RXSTALL_LSB);
-    pio->fdebug = fdebug_sm_mask << sm;
-
-    // Finally, clear some internal SM state
-    pio_sm_restart(pio, sm);
-    pio_sm_clkdiv_restart(pio, sm);
-    
-    pio->txf[sm]=op;
+    pio->txf[sm] = lpc_handlers[sm].cyctype_dir;
+    pio->txf[sm] = lpc_handlers[sm].nibbles_read-1;
     
     pio_sm_exec(pio, sm, pio_encode_mov(pio_pins, pio_null));
     pio_sm_exec(pio, sm, pio_encode_pull(false, true));
     pio_sm_exec(pio, sm, pio_encode_mov(pio_y, pio_osr));
-    pio_sm_exec(pio, sm, pio_encode_jmp(initial_pc));
+    pio_sm_exec(pio, sm, pio_encode_jmp(offset));
 }
 
+static void __not_in_flash_func(lpc_read_handler)(uint8_t sm){
+    register uint32_t address,shifted,pushed;
+    uint8_t result_data;
+    address = _pio->rxf[sm];
+    pushed = _pio->rxf[sm];
 
-static void __not_in_flash_func(lpc_read_irq_handler)(void){
-    register uint32_t address,mem_data,shifted,pushed;
-    address = pio->rxf[lpc_mem_read_SM];
-    pushed = pio->rxf[lpc_mem_read_SM];
-    mem_data = mem_read_handler(address);
+    if(lpc_handlers[sm].handler)
+        lpc_handlers[sm].handler(address, &result_data);
 
     shifted = 0xF000;
-    shifted |= (mem_data<<4);
-    pio->txf[lpc_mem_read_SM]=shifted;
-    pio->txf[lpc_mem_read_SM] = 8;
-
-    buffer[idx] = address;
-    buffer[idx+1] = pushed;
-    if(idx < 1024)
-        idx+=2;
-    
-    pio_interrupt_clear(pio, 0);//pio->irq=1;
+    shifted |= (result_data<<4);
+    _pio->txf[sm]=shifted;
+    _pio->txf[sm] = lpc_handlers[sm].nibbles_read-1;
+  
+    pio_interrupt_clear(_pio, sm);
 }
 
-void __not_in_flash_func(enable_pio_interrupts)(){
-    pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
-    irq_set_exclusive_handler(PIO0_IRQ_0, lpc_read_irq_handler);
-    //irq_set_exclusive_handler(PIO0_IRQ_1, lpc_read_irq_handler);
+static void __not_in_flash_func(lpc_write_handler)(uint8_t sm){
+    register uint32_t address,shifted,swaped_value;
+    uint8_t result_data;
+    address = _pio->rxf[sm];
+    result_data = (uint8_t)_pio->rxf[sm];
+    swaped_value  = (result_data&0xF)<<4;
+    swaped_value |= result_data>>4;
+    result_data = (uint8_t) swaped_value;
+    
+    if(lpc_handlers[sm].handler)
+        lpc_handlers[sm].handler(address, &result_data);
+
+    shifted = 0xFFF0;
+    _pio->txf[sm] = shifted;
+    _pio->txf[sm] = lpc_handlers[sm].nibbles_read-1;
+
+    pio_interrupt_clear(_pio, sm);
+}
+
+
+static void __not_in_flash_func(lpc_request_handler)(void){
+    if(pio_interrupt_get(_pio, LPC_OP_MEM_READ))
+    {
+        lpc_read_handler(LPC_OP_MEM_READ);
+    }else if(pio_interrupt_get(_pio, LPC_OP_MEM_WRITE))
+    {
+        lpc_write_handler(LPC_OP_MEM_WRITE);
+    }else if(pio_interrupt_get(_pio, LPC_OP_IO_READ))
+    {
+        lpc_read_handler(LPC_OP_IO_READ);
+    }else if(pio_interrupt_get(_pio, LPC_OP_IO_WRITE))
+    {
+        lpc_write_handler(LPC_OP_IO_WRITE);
+    }
+}
+
+static void __not_in_flash_func(enable_pio_interrupts)(void){
+    pio_set_irq0_source_enabled(_pio, pis_interrupt0, true);
+    pio_set_irq0_source_enabled(_pio, pis_interrupt1, true);
+    pio_set_irq0_source_enabled(_pio, pis_interrupt2, true);
+    pio_set_irq0_source_enabled(_pio, pis_interrupt3, true);
+    irq_set_exclusive_handler(PIO0_IRQ_0, lpc_request_handler);
     irq_set_enabled(PIO0_IRQ_0, true);
+    //irq_set_exclusive_handler(PIO0_IRQ_1, lpc_read_irq_handler);
     //irq_set_enabled(PIO0_IRQ_1, true);
 }
 
-int __not_in_flash_func(init_lpc_interface)() {
+
+/*
+    Used for LFRAME Cancel
+*/
+void __not_in_flash_func(set_disable_onboard_flash)(bool disable){
+    _disable_internal_flash = disable;
+}
+
+void __not_in_flash_func(lpc_set_callback)(LPC_OP_TYPE op, lpc_handler_cback cback){
+    lpc_handlers[op].handler = cback;
+}
+
+void __not_in_flash_func(init_lpc_interface)(PIO pio) {
     uint offset;
 
-    int sm = pio_claim_unused_sm(pio, true);
-    if(sm < 0){
-        printf("Error: Cannot claim a free state machine\n");
-        return -1;
-    }
+    _pio = pio;
 
-    if (pio_can_add_program(pio, &lpc_read_request_program)) {
-        offset = pio_add_program(pio, &lpc_read_request_program);
+    pio_claim_sm_mask(_pio, 15);
+
+    if (pio_can_add_program(_pio, &lpc_read_request_program)) {
+        offset = pio_add_program(_pio, &lpc_read_request_program);
     } else {
-        printf("Error: pio program can not be loaded\n");
-        return -2;
+        while(true)
+        {
+            gpio_put(PICO_DEFAULT_LED_PIN, 1);
+            sleep_ms(250);
+            printf("Error: pio program can not be loaded\n");
+            gpio_put(PICO_DEFAULT_LED_PIN, 0);
+            sleep_ms(250);
+        }
     }
     
-
-    pio_sm_config c =lpc_read_request_init(pio, sm, offset,32, disable_internal_flash);
+    lpc_gpio_init(_pio);
     
     
     gpio_init(D0_PIN);
     gpio_disable_pulls(D0_PIN);
 
-    if(disable_internal_flash){
+    if(_disable_internal_flash){
         gpio_set_dir(D0_PIN, GPIO_OUT);
         gpio_put(D0_PIN, 0);
-        gpio_set_max_drivestrength(D0_PIN);
-        gpio_set_max_drivestrength(LFRAME_PIN);
+        gpio_set_max_drivestrength(D0_PIN,     PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
+        gpio_set_max_drivestrength(LFRAME_PIN, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
     }else{
         gpio_set_dir(D0_PIN, GPIO_IN);
     }
     
     //lpc_disable_tsop(disable_internal_flash);
 
-    pio_custom_init(pio, sm, offset, &c, 0x4);
+    gpio_set_max_drivestrength(5, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
+    gpio_set_max_drivestrength(6, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
+
+    //pio_set_sm_mask_enabled(_pio, 15, false); //Disable All State Machines
+    pio_custom_init(_pio, LPC_OP_MEM_READ, offset,_disable_internal_flash);
+    pio_custom_init(_pio, LPC_OP_MEM_WRITE, offset,_disable_internal_flash);
+    pio_custom_init(_pio, LPC_OP_IO_READ, offset,false);
+    pio_custom_init(_pio, LPC_OP_IO_WRITE, offset,false);
     //Enable State Machines
-    
-    gpio_set_max_drivestrength(5);
-    gpio_set_max_drivestrength(6);
-    
-    pio_sm_set_enabled(pio, sm, true);
+    pio_sm_set_enabled(_pio, LPC_OP_MEM_READ, true);
+    pio_sm_set_enabled(_pio, LPC_OP_MEM_WRITE, true);
+    pio_sm_set_enabled(_pio, LPC_OP_IO_READ, true);
+    pio_sm_set_enabled(_pio, LPC_OP_IO_WRITE, true);
+    //pio_set_sm_mask_enabled(_pio, 15, true);//Enable All State Machines
 
-
-    pio->txf[lpc_mem_read_SM] = 8;
-    //pio->txf[lpc_mem_read_SM] = 0xCFFFFF00;
-    idx = 0;
-    pidx = 0;
-
-    
-    #ifndef POLLING
     enable_pio_interrupts();
     //enable_dma_interrupts(pio, sm);
-    #endif
-
-
-    return sm;
 }
 
-void __not_in_flash_func(lpc_poll_loop)(){
- while(true){
-    #ifdef POLLING
-    if((pio->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + lpc_mem_read_SM))) == 0){
-        lpc_read_irq_handler();
-    }
-    #endif
- }
+bool __not_in_flash_func(superio_add_handler)(uint16_t port_base, uint16_t mask, SUPERIO_PORT_CALLBACK_T read_cback, SUPERIO_PORT_CALLBACK_T write_cback){
+    if(total_entries >= SUPERIO_HANDLER_MAX_ENTRIES)
+        return false;
+    
+    hdlr_table[total_entries].port_base = port_base;
+    hdlr_table[total_entries].mask = mask;
+    hdlr_table[total_entries].read_cback = read_cback;
+    hdlr_table[total_entries].write_cback = write_cback;
+
+    total_entries++;
 }
 
-void __not_in_flash_func(lpc_printer)(){
-    while(true){
-        //uint32_t compare = pidx>idx?(idx+0x400):idx;
-        while(pidx < idx)
-        {
-            printf("\n\t%04d - %04d | %02d:[%08X] [%08X]",pidx,idx,count++,buffer[pidx],buffer[pidx+1]);
-            pidx+=2;
-            if(count == 20){
-                count=0;
-                printf("\n=========================================================");
-            }
-        }
-    }
-}
+const char* LPC_OP_STRINGS[LPC_OP_TOTAL] ={
+    [LPC_OP_IO_READ]  = "IO_READ  ",
+    [LPC_OP_IO_WRITE] = "IO_WRITE ",
+    [LPC_OP_MEM_WRITE]= "MEM_WRITE",
+    [LPC_OP_MEM_READ] = "MEM_READ ",
+};
 

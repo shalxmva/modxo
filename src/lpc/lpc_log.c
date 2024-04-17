@@ -26,50 +26,39 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
-#include <string.h>
+////////////////////////////   LOG SECTION   //////////////////////////
+#include "lpc_log.h"
+
 #include "pico/stdlib.h"
-#include "pico/multicore.h"
-#include "hardware/clocks.h"
-#include "hardware/dma.h"
+#define LOG_SIZE 1024
 
-#include "lpc/lpc_interface.h"
+struct{
+	int rear;
+	int front;
+	log_entry array[LOG_SIZE];
+}queue = {
+    .rear = LOG_SIZE -1,
+    .front = LOG_SIZE -1,
+};
 
-#include "flash_rom/flash_rom.h"
-#include "superio/LPC47M152.h"
-#include "superio/UART_16550.h"
-
-#define SYS_FREQ_IN_KHZ (264 * 1000)
-#define LED_STATUS_PIN PICO_DEFAULT_LED_PIN 
-
-void __not_in_flash_func(superio_port_init)(void){
-
+void __not_in_flash_func(enqueue)(log_entry item){
+	queue.rear = (queue.rear + 1) % LOG_SIZE;
+	if(queue.rear == queue.front){
+		queue.rear--;
+	}else{
+		queue.array[queue.rear] = item;
+	}
 }
 
-int __not_in_flash_func(main)(void){
-    set_sys_clock_khz(SYS_FREQ_IN_KHZ, true);
-    stdio_init_all();
+bool __not_in_flash_func(dequeue)(log_entry *out){
+	
+	if(queue.front != queue.rear ){
+		queue.front = (queue.front + 1) % LOG_SIZE;
+		*out = queue.array[queue.front];
+		return true;
+	}
 
-    gpio_init(LED_STATUS_PIN);
-    gpio_set_dir(LED_STATUS_PIN, GPIO_OUT);
-    gpio_put(LED_STATUS_PIN, 1);
-
-    init_lpc_interface(pio0);
-    
-    if( flashrom_init() == false){
-        while(true)
-        {
-            gpio_put(LED_STATUS_PIN, 1);
-            sleep_ms(250);
-            printf("Flash rom not programmed\n");
-            gpio_put(LED_STATUS_PIN, 0);
-            sleep_ms(250);
-        }
-    }
-    
-    lpc47m152_init();
-    uart_16550_init();
-
-    while(true){
-    }
+	return false;
 }
+ 
+/////////////////////////////////////////////////////////////////////
