@@ -42,11 +42,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SYS_FREQ_IN_KHZ (264 * 1000)
 #define LED_STATUS_PIN PICO_DEFAULT_LED_PIN 
 
-void __not_in_flash_func(superio_port_init)(void){
+void superio_port_init(void){
 
 }
 
-int __not_in_flash_func(main)(void){
+int main(void){
     set_sys_clock_khz(SYS_FREQ_IN_KHZ, true);
     stdio_init_all();
 
@@ -67,8 +67,8 @@ int __not_in_flash_func(main)(void){
         }
     }
     
-    lpc47m152_init();
-    uart_16550_init();
+    //lpc47m152_init();
+    //uart_16550_init();
 
     while(true){
     }

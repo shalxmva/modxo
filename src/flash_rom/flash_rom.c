@@ -44,7 +44,7 @@ static const uint8_t*  flash_rom_data = FLASH_ROM_START_ADDRESS;
 static uint8_t mem_read_count=0;
 
 
-static void __not_in_flash_func(mem_read_handler)(uint32_t address, uint8_t* data){
+static void mem_read_handler(uint32_t address, uint8_t* data){
     register uint32_t mem_data;
     *data = flash_rom_data[address & flash_rom_mask];
 
@@ -55,11 +55,11 @@ static void __not_in_flash_func(mem_read_handler)(uint32_t address, uint8_t* dat
     }
 }
 
-static void __not_in_flash_func(mem_write_handler)(uint32_t address, uint8_t* data){
+static void mem_write_handler(uint32_t address, uint8_t* data){
 
 }
 
-bool __not_in_flash_func(flashrom_init)(void){
+bool flashrom_init(void){
     flash_rom_mask = *flash_rom_mask_address;
     lpc_set_callback(LPC_OP_MEM_READ,  mem_read_handler);
     lpc_set_callback(LPC_OP_MEM_WRITE, mem_write_handler);

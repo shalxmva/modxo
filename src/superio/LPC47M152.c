@@ -51,7 +51,7 @@ struct {
     .device_id = 0
 };
 
-static void __not_in_flash_func(lpc47m152_write_handler)(uint16_t address, uint8_t* data){
+static void lpc47m152_write_handler(uint16_t address, uint8_t* data){
     switch(address){
         case 0x002E:
             if(lpc47m152_regs.config_mode == false){
@@ -83,7 +83,7 @@ static void __not_in_flash_func(lpc47m152_write_handler)(uint16_t address, uint8
     }
 }
 
-static void __not_in_flash_func(lpc47m152_read_handler)(uint16_t address, uint8_t* data){
+static void lpc47m152_read_handler(uint16_t address, uint8_t* data){
     if(lpc47m152_regs.config_mode){
         switch(address){
             case 0x2E:
@@ -104,6 +104,6 @@ static void __not_in_flash_func(lpc47m152_read_handler)(uint16_t address, uint8_
     }
 }
 
-void __not_in_flash_func(lpc47m152_init)(void){
+void lpc47m152_init(void){
     superio_add_handler(0x002E, 0xFFFE, lpc47m152_read_handler, lpc47m152_write_handler); //LPC47M152(superio) port emulation
 }

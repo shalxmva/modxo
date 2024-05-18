@@ -35,7 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../lpc/superio.h"
 #include "tusb.h"
 
-void __not_in_flash_func(uart_16550_port_write)(uint16_t address, uint8_t* data){
+void uart_16550_port_write(uint16_t address, uint8_t* data){
     //UART Ports
     if((address == 0x3F8)){
         if(tud_cdc_connected())
@@ -43,7 +43,7 @@ void __not_in_flash_func(uart_16550_port_write)(uint16_t address, uint8_t* data)
     }
 }
 
-void __not_in_flash_func(uart_16550_port_read)(uint16_t address, uint8_t* data){
+void uart_16550_port_read(uint16_t address, uint8_t* data){
     //UART Ports
     if(tud_cdc_connected()){  //If usb serial port is open
         if(address == 0x3FD){
@@ -58,6 +58,6 @@ void __not_in_flash_func(uart_16550_port_read)(uint16_t address, uint8_t* data){
      }
 }
 
-void __not_in_flash_func(uart_16550_init)(void){
+void uart_16550_init(void){
     superio_add_handler(0x03F8, 0xFFF8, uart_16550_port_read,   uart_16550_port_write);     //16550 Uart port emulation
 }
