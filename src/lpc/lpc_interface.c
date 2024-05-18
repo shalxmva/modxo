@@ -70,7 +70,7 @@ static SUPERIO_PORT_HANDLER_T hdlr_table[SUPERIO_HANDLER_MAX_ENTRIES];
 static uint8_t total_entries=0;
 
 
-static void __not_in_flash_func(io_write_hdlr)(uint32_t address, uint8_t* data){
+static void io_write_hdlr(uint32_t address, uint8_t* data){
     for(uint8_t tidx=0; tidx < total_entries; tidx++){
         if((address&hdlr_table[tidx].mask) == hdlr_table[tidx].port_base){
             hdlr_table[tidx].write_cback(address, data);
@@ -78,7 +78,7 @@ static void __not_in_flash_func(io_write_hdlr)(uint32_t address, uint8_t* data){
     }
 }
 
-static void __not_in_flash_func(io_read_hdlr)(uint32_t address, uint8_t* data){
+static void io_read_hdlr(uint32_t address, uint8_t* data){
     for(uint8_t tidx=0; tidx < total_entries; tidx++){
         if((address&hdlr_table[tidx].mask) == hdlr_table[tidx].port_base){
             hdlr_table[tidx].read_cback(address, data);
@@ -90,7 +90,7 @@ static void __not_in_flash_func(io_read_hdlr)(uint32_t address, uint8_t* data){
 static PIO _pio;
 static bool _disable_internal_flash=true;
 
-static void __not_in_flash_func(lpc_gpio_init)(PIO pio){
+static void lpc_gpio_init(PIO pio){
    // Connect the GPIOs to selected PIO block
     for(uint i = LPC_PIN_START; i < LPC_PIN_START + LAD_PIN_COUNT; i++) {
         pio_gpio_init(pio, i);
@@ -105,7 +105,7 @@ static void __not_in_flash_func(lpc_gpio_init)(PIO pio){
 }
 
 
-static void __not_in_flash_func(gpio_set_max_drivestrength)(io_rw_32 gpio, uint32_t strength) {
+static void gpio_set_max_drivestrength(io_rw_32 gpio, uint32_t strength) {
     hw_write_masked(
             &padsbank0_hw->io[gpio],
             strength<<PADS_BANK0_GPIO0_DRIVE_LSB,
@@ -114,7 +114,7 @@ static void __not_in_flash_func(gpio_set_max_drivestrength)(io_rw_32 gpio, uint3
 }
 
 
-static void __not_in_flash_func(pio_custom_init)(PIO pio, uint sm, uint offset, bool lframe_cancel){
+static void pio_custom_init(PIO pio, uint sm, uint offset, bool lframe_cancel){
     valid_params_if(PIO, offset < PIO_INSTRUCTION_COUNT);
     lpc_read_request_init(pio, sm, offset, lpc_handlers[sm].address_len, lframe_cancel);
 
@@ -127,7 +127,7 @@ static void __not_in_flash_func(pio_custom_init)(PIO pio, uint sm, uint offset, 
     pio_sm_exec(pio, sm, pio_encode_jmp(offset));
 }
 
-static void __not_in_flash_func(lpc_read_handler)(uint8_t sm){
+static void lpc_read_handler(uint8_t sm){
     register uint32_t address,shifted,pushed;
     uint8_t result_data;
     address = _pio->rxf[sm];
@@ -144,7 +144,7 @@ static void __not_in_flash_func(lpc_read_handler)(uint8_t sm){
     pio_interrupt_clear(_pio, sm);
 }
 
-static void __not_in_flash_func(lpc_write_handler)(uint8_t sm){
+static void lpc_write_handler(uint8_t sm){
     register uint32_t address,shifted,swaped_value;
     uint8_t result_data;
     address = _pio->rxf[sm];
@@ -164,7 +164,7 @@ static void __not_in_flash_func(lpc_write_handler)(uint8_t sm){
 }
 
 
-static void __not_in_flash_func(lpc_request_handler)(void){
+static void lpc_request_handler(void){
     if(pio_interrupt_get(_pio, LPC_OP_MEM_READ))
     {
         lpc_read_handler(LPC_OP_MEM_READ);
@@ -180,7 +180,7 @@ static void __not_in_flash_func(lpc_request_handler)(void){
     }
 }
 
-static void __not_in_flash_func(enable_pio_interrupts)(void){
+static void enable_pio_interrupts(void){
     pio_set_irq0_source_enabled(_pio, pis_interrupt0, true);
     pio_set_irq0_source_enabled(_pio, pis_interrupt1, true);
     pio_set_irq0_source_enabled(_pio, pis_interrupt2, true);
@@ -195,15 +195,15 @@ static void __not_in_flash_func(enable_pio_interrupts)(void){
 /*
     Used for LFRAME Cancel
 */
-void __not_in_flash_func(set_disable_onboard_flash)(bool disable){
+void set_disable_onboard_flash(bool disable){
     _disable_internal_flash = disable;
 }
 
-void __not_in_flash_func(lpc_set_callback)(LPC_OP_TYPE op, lpc_handler_cback cback){
+void lpc_set_callback(LPC_OP_TYPE op, lpc_handler_cback cback){
     lpc_handlers[op].handler = cback;
 }
 
-void __not_in_flash_func(init_lpc_interface)(PIO pio) {
+void init_lpc_interface(PIO pio) {
     uint offset;
 
     _pio = pio;
@@ -259,7 +259,7 @@ void __not_in_flash_func(init_lpc_interface)(PIO pio) {
     //enable_dma_interrupts(pio, sm);
 }
 
-bool __not_in_flash_func(superio_add_handler)(uint16_t port_base, uint16_t mask, SUPERIO_PORT_CALLBACK_T read_cback, SUPERIO_PORT_CALLBACK_T write_cback){
+bool superio_add_handler(uint16_t port_base, uint16_t mask, SUPERIO_PORT_CALLBACK_T read_cback, SUPERIO_PORT_CALLBACK_T write_cback){
     if(total_entries >= SUPERIO_HANDLER_MAX_ENTRIES)
         return false;
     

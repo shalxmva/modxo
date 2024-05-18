@@ -41,7 +41,7 @@ struct{
     .front = LOG_SIZE -1,
 };
 
-void __not_in_flash_func(enqueue)(log_entry item){
+void enqueue(log_entry item){
 	queue.rear = (queue.rear + 1) % LOG_SIZE;
 	if(queue.rear == queue.front){
 		queue.rear--;
@@ -50,7 +50,7 @@ void __not_in_flash_func(enqueue)(log_entry item){
 	}
 }
 
-bool __not_in_flash_func(dequeue)(log_entry *out){
+bool dequeue(log_entry *out){
 	
 	if(queue.front != queue.rear ){
 		queue.front = (queue.front + 1) % LOG_SIZE;
