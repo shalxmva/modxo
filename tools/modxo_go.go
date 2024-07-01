@@ -197,7 +197,7 @@ func main() {
 	fmt.Println("****************************************")
 
 	if len(os.Args) != 4 {
-		fmt.Println("Usage: go run uf2_converter.go <command> <input_file> <output_file>")
+		fmt.Println("Usage: go run modxo_go.go <command> <input_file> <output_file>")
 		fmt.Println("Commands: to_uf2, to_bin")
 		os.Exit(1)
 	}
