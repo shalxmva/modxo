@@ -65,6 +65,13 @@ LPC_SM_HANDLER lpc_handlers[LPC_OP_TOTAL]={
     [LPC_OP_MEM_WRITE]= {.nibbles_read=10,.cyctype_dir=6, .handler=NULL, .address_len=32},
 }; // 4 SM per PIO
 
+const char* LPC_OP_STRINGS[LPC_OP_TOTAL] ={
+    [LPC_OP_IO_READ] = "IO_READ  ",
+    [LPC_OP_IO_WRITE] = "IO_WRITE ",
+    [LPC_OP_MEM_WRITE] = "MEM_WRITE",
+    [LPC_OP_MEM_READ] = "MEM_READ ",
+};
+
 #define SUPERIO_HANDLER_MAX_ENTRIES 32
 static SUPERIO_PORT_HANDLER_T hdlr_table[SUPERIO_HANDLER_MAX_ENTRIES];
 static uint8_t total_entries=0;
@@ -89,6 +96,7 @@ static void io_read_hdlr(uint32_t address, uint8_t* data){
 //PIO
 static PIO _pio;
 static bool _disable_internal_flash=true;
+static uint offset;
 
 static void lpc_gpio_init(PIO pio){
    // Connect the GPIOs to selected PIO block
@@ -197,12 +205,37 @@ static void enable_pio_interrupts(void){
 */
 void set_disable_onboard_flash(bool disable){
     _disable_internal_flash = disable;
+    if (_disable_internal_flash)
+    {
+        gpio_put(D0_PIN, 0);
+        gpio_set_dir(D0_PIN, GPIO_OUT);
+    }
+    else
+    {
+        gpio_set_dir(D0_PIN, GPIO_IN);
+    }
 }
 
 void lpc_set_callback(LPC_OP_TYPE op, lpc_handler_cback cback){
     lpc_handlers[op].handler = cback;
 }
 
+void lpc_interface_start_sm()
+{
+    pio_set_sm_mask_enabled(_pio, 15, false); // Disable All State Machines
+    pio_custom_init(_pio, LPC_OP_MEM_READ, offset, _disable_internal_flash);
+    pio_custom_init(_pio, LPC_OP_MEM_WRITE, offset, _disable_internal_flash);
+    pio_custom_init(_pio, LPC_OP_IO_READ, offset, false);
+    pio_custom_init(_pio, LPC_OP_IO_WRITE, offset, false);
+    // Enable State Machines
+    pio_sm_set_enabled(_pio, LPC_OP_MEM_READ, true);
+    pio_sm_set_enabled(_pio, LPC_OP_MEM_WRITE, true);
+    pio_sm_set_enabled(_pio, LPC_OP_IO_READ, true);
+    pio_sm_set_enabled(_pio, LPC_OP_IO_WRITE, true);
+    // pio_set_sm_mask_enabled(_pio, 15, true);//Enable All State Machines
+
+    enable_pio_interrupts();
+}
 void init_lpc_interface(PIO pio) {
     uint offset;
 
@@ -230,8 +263,8 @@ void init_lpc_interface(PIO pio) {
     gpio_disable_pulls(D0_PIN);
 
     if(_disable_internal_flash){
-        gpio_set_dir(D0_PIN, GPIO_OUT);
         gpio_put(D0_PIN, 0);
+        gpio_set_dir(D0_PIN, GPIO_OUT);
         gpio_set_max_drivestrength(D0_PIN,     PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
         gpio_set_max_drivestrength(LFRAME_PIN, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
     }else{
@@ -243,20 +276,7 @@ void init_lpc_interface(PIO pio) {
     gpio_set_max_drivestrength(5, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
     gpio_set_max_drivestrength(6, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
 
-    //pio_set_sm_mask_enabled(_pio, 15, false); //Disable All State Machines
-    pio_custom_init(_pio, LPC_OP_MEM_READ, offset,_disable_internal_flash);
-    pio_custom_init(_pio, LPC_OP_MEM_WRITE, offset,_disable_internal_flash);
-    pio_custom_init(_pio, LPC_OP_IO_READ, offset,false);
-    pio_custom_init(_pio, LPC_OP_IO_WRITE, offset,false);
-    //Enable State Machines
-    pio_sm_set_enabled(_pio, LPC_OP_MEM_READ, true);
-    pio_sm_set_enabled(_pio, LPC_OP_MEM_WRITE, true);
-    pio_sm_set_enabled(_pio, LPC_OP_IO_READ, true);
-    pio_sm_set_enabled(_pio, LPC_OP_IO_WRITE, true);
-    //pio_set_sm_mask_enabled(_pio, 15, true);//Enable All State Machines
-
-    enable_pio_interrupts();
-    //enable_dma_interrupts(pio, sm);
+    lpc_interface_start_sm();
 }
 
 bool superio_add_handler(uint16_t port_base, uint16_t mask, SUPERIO_PORT_CALLBACK_T read_cback, SUPERIO_PORT_CALLBACK_T write_cback){
@@ -270,11 +290,4 @@ bool superio_add_handler(uint16_t port_base, uint16_t mask, SUPERIO_PORT_CALLBAC
 
     total_entries++;
 }
-
-const char* LPC_OP_STRINGS[LPC_OP_TOTAL] ={
-    [LPC_OP_IO_READ]  = "IO_READ  ",
-    [LPC_OP_IO_WRITE] = "IO_WRITE ",
-    [LPC_OP_MEM_WRITE]= "MEM_WRITE",
-    [LPC_OP_MEM_READ] = "MEM_READ ",
-};
 

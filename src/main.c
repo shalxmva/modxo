@@ -41,9 +41,53 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define SYS_FREQ_IN_KHZ (264 * 1000)
 #define LED_STATUS_PIN PICO_DEFAULT_LED_PIN 
+#define LPC_RESET 7
+#define LPC_ON    8
+bool reset_pin = false;
 
-void superio_port_init(void){
+void reset_pin_falling()
+{
+    init_lpc_interface(pio0);
+}
 
+void pin_3_3v_falling()
+{
+    
+}
+
+void core0_irq_handler(uint gpio, uint32_t event)
+{
+    if (gpio == LPC_RESET && (event & GPIO_IRQ_EDGE_FALL) != 0)
+    {
+        reset_pin_falling();
+    }
+
+    if (gpio == LPC_ON && (event & GPIO_IRQ_EDGE_FALL) != 0)
+    {
+        pin_3_3v_falling();
+    }
+}
+
+void xbox_shutdown()
+{
+    multicore_reset_core1();
+}
+
+void modxo_init_pin_irq_fall(uint pin)
+{
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_IN);
+    gpio_pull_up(pin);
+    gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_FALL, true);
+}
+
+void modxo_init_interrupts()
+{
+    modxo_init_pin_irq_fall(LPC_RESET);
+    modxo_init_pin_irq_fall(LPC_ON);
+
+    gpio_set_irq_callback(core0_irq_handler);
+    irq_set_enabled(IO_IRQ_BANK0, true);
 }
 
 int main(void){
@@ -71,5 +115,6 @@ int main(void){
     //uart_16550_init();
 
     while(true){
+        __wfe();
     }
 }
