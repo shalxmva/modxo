@@ -1,10 +1,11 @@
 #!/bin/sh
 
-mkdir build
+mkdir -p build
 cd build
 cmake ..
-make
+make clean
+make -j
 cd ..
-mkdir out
+mkdir -p out
 mv build/modxo.bin out/
 mv build/modxo.uf2 out/
