@@ -35,12 +35,15 @@
 *.i*86
 *.x86_64
 *.hex
+*.bin
+*.uf2
 
 # Debug files
 *.dSYM/
 *.su
 *.idb
 *.pdb
+*.dis
 
 # Kernel Module Compile Results
 *.mod*
@@ -54,3 +57,13 @@ dkms.conf
 # Build folder
 build
 .vscode
+
+CMakeFiles/*
+/elf2uf2
+/generated
+/cmake_install.cmake
+/CMakeCache.txt
+/Makefile
+/pico-sdk
+/pioasm
+/lpc_comm.pio.h
