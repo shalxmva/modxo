@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Debug)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -24,19 +24,37 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME})
 pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
 
+set(SOURCE_DIR "${CMAKE_SOURCE_DIR}/src")
 
-pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/src/lpc/lpc_comm.pio)
+file(GLOB_RECURSE HEADERS "${SOURCE_DIR}/*.h")
+target_include_directories(${PROJECT_NAME} PRIVATE ${SOURCE_DIR})
 
-#Source files
-target_sources(${PROJECT_NAME} PRIVATE 
-    src/main.c 
-    src/lpc/lpc_comm.pio 
-    src/lpc/lpc_interface.c
-    src/lpc/lpc_log.c
-    src/flash_rom/flash_rom.c
-    src/superio/LPC47M152.c
-    src/superio/UART_16550.c
+pico_generate_pio_header(${PROJECT_NAME} ${SOURCE_DIR}/lpc/lpc_comm.pio)
+
+set(DIRECTORIES_TO_GLOB
+    "${SOURCE_DIR}"
+    "${SOURCE_DIR}/flash_rom"
+    "${SOURCE_DIR}/lpc"
+    "${SOURCE_DIR}/superio"
+    "${SOURCE_DIR}/led"
 )
+set(SOURCES "")
+
+foreach(dir ${DIRECTORIES_TO_GLOB})
+    file(GLOB dir_files "${dir}/*.c")
+    list(APPEND SOURCES ${dir_files})
+endforeach()
+
+if(WS2812_LED)
+    message(STATUS "Compiling with WS2812 support")
+    list(APPEND SOURCES "${SOURCE_DIR}/led/ws2812/ws2812_led.c")
+    pico_generate_pio_header(${PROJECT_NAME} ${SOURCE_DIR}/led/ws2812/ws2812.pio)
+else()
+    message(STATUS "Compiling without WS2812 support")
+    list(APPEND SOURCES "${SOURCE_DIR}/led/pico/pico_led.c")
+endif()
+
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 
 # Link to pico_stdlib (gpio, time, etc. functions)
 target_link_libraries(${PROJECT_NAME} PRIVATE

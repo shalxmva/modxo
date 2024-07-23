@@ -33,7 +33,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "hardware/structs/bus_ctrl.h"
 
 #include "flash_rom.h"
-#include "../lpc/lpc_interface.h"
+#include "lpc/lpc_interface.h"
 
 #define FLASH_ROM_START_ADDRESS ((uint8_t*)0x10040000)
 #define FLASH_ROM_MASK_ADDRESS  ((uint32_t*)(FLASH_ROM_START_ADDRESS - (4*1024)))

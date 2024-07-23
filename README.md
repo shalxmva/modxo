@@ -26,6 +26,11 @@ into an Original Xbox Modchip that allows running a bios.
 2. Drag and Drop your bios file
 3. UF2 File with bios image will be downloaded
 
+#### Packing Bios locally
+1. Copy bios file to `bios.bin` in this directory or place any bios files in the `bios` directory
+2. `docker compose run --rm bios2uf2`
+3. output will be `out/[bios].uf2`
+
 #### Flashing steps
 1. Connect Raspberry Pi Pico with BOOTSEL button pressed to a PC and one new drive will appear.
 2. Copy Modxo.uf2 into the Raspberry Pi Pico Drive.
@@ -33,6 +38,17 @@ into an Original Xbox Modchip that allows running a bios.
 4. Copy your bios UF2 file into the drive
 
 # Firmware Build Instructions
-Todo 
-#### Windows
-Todo
+#### Docker
+1. `docker compose run --rm builder`
+2. output will be `out/modxo.uf2`
+
+There are also some extra parameters that can be passed to the build script:
+
+- WS2812: enables support for WS2812 LEDs (typically present in the RP2040 Zero boards). Default is disabled.
+
+- CLEAN: triggers a clean build. Default is disabled.
+
+- BUILD_TYPE: release|debug. Default is debug.
+
+- BIOS2UF2: path (or glob) to the bios file(s) to be converted to UF2. Default is `bios.bin bios/*.bin`.
+

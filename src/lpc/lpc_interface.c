@@ -38,6 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "lpc_comm.pio.h"
 #include "lpc_log.h"
+#include "led/led.h"
 
 void start_mem_read_sm(void);
 
@@ -107,7 +108,7 @@ static void lpc_gpio_init(PIO pio){
 
    pio_gpio_init(pio, LCLK_PIN);
    gpio_disable_pulls(LCLK_PIN);
-   
+
    pio_gpio_init(pio, LFRAME_PIN);
    gpio_disable_pulls(LFRAME_PIN);
 }
@@ -128,7 +129,7 @@ static void pio_custom_init(PIO pio, uint sm, uint offset, bool lframe_cancel){
 
     pio->txf[sm] = lpc_handlers[sm].cyctype_dir;
     pio->txf[sm] = lpc_handlers[sm].nibbles_read-1;
-    
+
     pio_sm_exec(pio, sm, pio_encode_mov(pio_pins, pio_null));
     pio_sm_exec(pio, sm, pio_encode_pull(false, true));
     pio_sm_exec(pio, sm, pio_encode_mov(pio_y, pio_osr));
@@ -148,7 +149,7 @@ static void lpc_read_handler(uint8_t sm){
     shifted |= (result_data<<4);
     _pio->txf[sm]=shifted;
     _pio->txf[sm] = lpc_handlers[sm].nibbles_read-1;
-  
+
     pio_interrupt_clear(_pio, sm);
 }
 
@@ -160,7 +161,7 @@ static void lpc_write_handler(uint8_t sm){
     swaped_value  = (result_data&0xF)<<4;
     swaped_value |= result_data>>4;
     result_data = (uint8_t) swaped_value;
-    
+
     if(lpc_handlers[sm].handler)
         lpc_handlers[sm].handler(address, &result_data);
 
@@ -246,19 +247,18 @@ void init_lpc_interface(PIO pio) {
     if (pio_can_add_program(_pio, &lpc_read_request_program)) {
         offset = pio_add_program(_pio, &lpc_read_request_program);
     } else {
+        LED rp2040_led;
+        init_led_struct(&rp2040_led);
+
         while(true)
         {
-            gpio_put(PICO_DEFAULT_LED_PIN, 1);
-            sleep_ms(250);
-            printf("Error: pio program can not be loaded\n");
-            gpio_put(PICO_DEFAULT_LED_PIN, 0);
-            sleep_ms(250);
+            rp2040_led.blink_error("Error: pio program can not be loaded\n");
         }
     }
-    
+
     lpc_gpio_init(_pio);
-    
-    
+
+
     gpio_init(D0_PIN);
     gpio_disable_pulls(D0_PIN);
 
@@ -270,7 +270,7 @@ void init_lpc_interface(PIO pio) {
     }else{
         gpio_set_dir(D0_PIN, GPIO_IN);
     }
-    
+
     //lpc_disable_tsop(disable_internal_flash);
 
     gpio_set_max_drivestrength(5, PADS_BANK0_GPIO0_DRIVE_VALUE_12MA);
@@ -282,7 +282,7 @@ void init_lpc_interface(PIO pio) {
 bool superio_add_handler(uint16_t port_base, uint16_t mask, SUPERIO_PORT_CALLBACK_T read_cback, SUPERIO_PORT_CALLBACK_T write_cback){
     if(total_entries >= SUPERIO_HANDLER_MAX_ENTRIES)
         return false;
-    
+
     hdlr_table[total_entries].port_base = port_base;
     hdlr_table[total_entries].mask = mask;
     hdlr_table[total_entries].read_cback = read_cback;
