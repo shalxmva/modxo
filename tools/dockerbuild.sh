@@ -1,8 +1,8 @@
 #!/bin/sh
 
-WS2812=${WS2812:-0}
+WS2812=${WS2812_LED:-OFF}
 CLEAN=${CLEAN:-0}
-BUILD_TYPE=${BUILD_TYPE:-"debug"} # Default build type
+BUILD_TYPE=${BUILD_TYPE:-"Debug"} # Default build type
 BIOS2UF2=${BIOS2UF2:-"bios.bin bios/*.bin"}
 
 WORKING_DIR=$(pwd)
@@ -14,7 +14,7 @@ mkdir -p "$BUILD_DIR"
 mkdir -p "$OUT_DIR"
 
 cd "$BUILD_DIR"
-cmake -DWS2812_LED=$WS2812 -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
+cmake -DWS2812_LED=$WS2812_LED -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
 
 if [ $CLEAN -eq 1 ]; then
     make clean

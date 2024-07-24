@@ -9,7 +9,7 @@ services:
     volumes:
       - .:/home/dev
     environment:
-      - WS2812
+      - WS2812_LED
       - CLEAN
       - BUILD_TYPE
       - BIOS2UF2

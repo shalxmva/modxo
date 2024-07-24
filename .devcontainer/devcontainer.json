@@ -2,9 +2,7 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/cpp
 {
   "name": "pico-sdk",
-  "dockerComposeFile": [
-    "../docker-compose.yml"
-  ],
+  "dockerComposeFile": "../docker-compose.yml",
   "service": "dev",
   "workspaceFolder": "/home/dev",
   "remoteUser": "root",

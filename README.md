@@ -32,9 +32,9 @@ into an Original Xbox Modchip that allows running a bios.
 3. Reconnect Raspberry Pi Pico with BOOTSEL button pressed, so the previous drive will showup again.
 4. Copy your bios UF2 file into the drive
 
-# Docker Build
+# Docker
 #### Setup
-1 Build your base docker image with `docker build -t modxo-builder .`
+1. Build your base docker image with `docker build -t modxo-builder .`
 
 #### Firmware Build
 1. `docker compose run --rm builder`
@@ -42,16 +42,21 @@ into an Original Xbox Modchip that allows running a bios.
 
 There are also some extra parameters that can be passed to the build script:
 
-- WS2812: enables support for WS2812 LEDs (typically present in the RP2040 Zero boards). Default is disabled.
+- WS2812_LED: ON|OFF - Enables support for WS2812 LEDs (typically present in the RP2040 Zero boards). Default is OFF.
 
 - CLEAN: triggers a clean build. Default is disabled.
 
-- BUILD_TYPE: release|debug. Default is debug.
+- BUILD_TYPE: Release|Debug - Default is Debug.
 
-- BIOS2UF2: path (or glob) to the bios file(s) to be converted to UF2. Default is `bios.bin bios/*.bin`.
+- BIOS2UF2: path (or glob) to the bios file(s) to be converted to UF2. Default is `"bios.bin bios/*.bin"`.
+
+
+>_Example:_
+>
+> `WS2812_LED=ON BUILD_TYPE=Release docker compose run --rm builder`
 
 #### Packing Bios locally
-1. Copy bios file to `bios.bin` in this directory or place any bios files in the `bios` directory
+1. Copy bios file to `bios.bin` in this directory or place any bios files in the bios directory
 2. `docker compose run --rm bios2uf2`
 3. output will be `out/[bios].uf2`
 
