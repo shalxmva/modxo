@@ -39,8 +39,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "superio/LPC47M152.h"
 #include "superio/UART_16550.h"
 
+#include "led/led.h"
+
 #define SYS_FREQ_IN_KHZ (264 * 1000)
-#define LED_STATUS_PIN PICO_DEFAULT_LED_PIN 
 #define LPC_RESET 7
 #define LPC_ON    8
 bool reset_pin = false;
@@ -52,7 +53,7 @@ void reset_pin_falling()
 
 void pin_3_3v_falling()
 {
-    
+
 }
 
 void core0_irq_handler(uint gpio, uint32_t event)
@@ -94,23 +95,19 @@ int main(void){
     set_sys_clock_khz(SYS_FREQ_IN_KHZ, true);
     stdio_init_all();
 
-    gpio_init(LED_STATUS_PIN);
-    gpio_set_dir(LED_STATUS_PIN, GPIO_OUT);
-    gpio_put(LED_STATUS_PIN, 1);
+    LED rp2040_led;
+    init_led_struct(&rp2040_led);
+    rp2040_led.setup();
 
     init_lpc_interface(pio0);
-    
+
     if( flashrom_init() == false){
         while(true)
         {
-            gpio_put(LED_STATUS_PIN, 1);
-            sleep_ms(250);
-            printf("Flash rom not programmed\n");
-            gpio_put(LED_STATUS_PIN, 0);
-            sleep_ms(250);
+            rp2040_led.blink_error("Flash rom not programmed\n");
         }
     }
-    
+
     //lpc47m152_init();
     //uart_16550_init();
 

@@ -32,8 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pico/multicore.h"
 #include "hardware/structs/bus_ctrl.h"
 
-#include "../lpc/superio.h"
-#include "../lpc/lpc_interface.h"
+#include "lpc/superio.h"
+#include "lpc/lpc_interface.h"
 
 
 #define ENTER_CONFIGURATION_MODE_VALUE 0x55
