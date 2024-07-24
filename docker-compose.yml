@@ -1,7 +1,10 @@
 services:
   builder:
-    profiles: ["builder"]
-    image: lukstep/raspberry-pi-pico-sdk:latest
+    profiles: [ "builder" ]
+    image: modxo-builder:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     working_dir: /home/dev
     volumes:
       - .:/home/dev
@@ -10,16 +13,30 @@ services:
       - CLEAN
       - BUILD_TYPE
       - BIOS2UF2
-    command: ["/home/dev/tools/dockerbuild.sh"]
+    command: [ "/home/dev/tools/dockerbuild.sh" ]
   bios2uf2:
-    profiles: ["bios2uf2"]
-    image: lukstep/raspberry-pi-pico-sdk:latest
+    profiles: [ "bios2uf2" ]
+    image: modxo-builder:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     working_dir: /home/dev
     volumes:
       - .:/home/dev
-    command: ["python", "tools/flashbin_to_uf2.py", "--output-dir", "/home/dev/out", "bios.bin", "bios/*.bin"]
+    command:
+      [
+        "python",
+        "tools/flashbin_to_uf2.py",
+        "--output-dir",
+        "/home/dev/out",
+        "bios.bin",
+        "bios/*.bin"
+      ]
   dev:
-    image: lukstep/raspberry-pi-pico-sdk:latest
+    image: modxo-builder:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - .:/home/dev
-    command: ["sleep", "infinity"]
+    command: [ "sleep", "infinity" ]
