@@ -26,6 +26,11 @@ into an Original Xbox Modchip that allows running a bios.
 2. Drag and Drop your bios file
 3. UF2 File with bios image will be downloaded
 
+##### Paccking Bios locally
+1. Copy bios file to `bios.bin` in this directory
+2. `docker compose up bios2uf2`
+3. output will be `out/bios.uf2`
+
 #### Flashing steps
 1. Connect Raspberry Pi Pico with BOOTSEL button pressed to a PC and one new drive will appear.
 2. Copy Modxo.uf2 into the Raspberry Pi Pico Drive.
