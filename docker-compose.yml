@@ -1,0 +1,20 @@
+services:
+  builder:
+    profiles: ["builder", "build_all"]
+    image: lukstep/raspberry-pi-pico-sdk:latest
+    working_dir: /home/dev
+    volumes:
+      - .:/home/dev
+    command: ["/home/dev/tools/dockerbuild.sh"]
+  bios2uf2:
+    profiles: ["bios2uf2", "build_all"]
+    image: golang:1.22-bookworm
+    working_dir: /home/dev
+    volumes:
+      - .:/home/dev
+    command: ["go", "run", "tools/modxo_go.go", "to_uf2", "bios.bin", "out/bios"]
+  dev:
+    image: lukstep/raspberry-pi-pico-sdk:latest
+    volumes:
+      - .:/home/dev
+    command: ["sleep", "infinity"]
