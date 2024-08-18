@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pico/multicore.h"
 #include "hardware/structs/bus_ctrl.h"
 
-#include "../lpc/superio.h"
+#include "lpc/superio.h"
 #include "tusb.h"
 
 void uart_16550_port_write(uint16_t address, uint8_t* data){
